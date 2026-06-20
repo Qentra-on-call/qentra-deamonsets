@@ -1,0 +1,59 @@
+{{- if .Values.kubeMetrics.enabled }}
+# Read-only cluster access for k8s health (pods + nodes). The agent only GETs/LISTs
+# pod and node status — it never mutates the cluster, reads no secrets, and runs no exec.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "qentra-agent.fullname" . }}
+  labels:
+    {{- include "qentra-agent.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "nodes"]
+    verbs: ["get", "list"]
+  # Kubelet stats summary (per-pod/node network throughput + errors → CNI health).
+  - apiGroups: [""]
+    resources: ["nodes/proxy"]
+    verbs: ["get"]
+{{- if .Values.remoteAccess.enabled }}
+  # On-demand detail view + logs (read-only). Gated by remoteAccess.enabled.
+  - apiGroups: [""]
+    resources: ["services", "configmaps", "events", "endpoints"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
+    verbs: ["get", "list"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list"]
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["get", "list"]
+  - apiGroups: ["autoscaling.k8s.io"]
+    resources: ["verticalpodautoscalers"]
+    verbs: ["get", "list"]
+{{- end }}
+  # Optional CPU/memory usage (node gauges + throttling-risk). Harmless if
+  # metrics-server isn't installed — the agent just skips those reads.
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods", "nodes"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "qentra-agent.fullname" . }}
+  labels:
+    {{- include "qentra-agent.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "qentra-agent.fullname" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "qentra-agent.fullname" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

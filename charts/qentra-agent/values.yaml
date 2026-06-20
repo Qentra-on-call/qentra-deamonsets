@@ -1,0 +1,58 @@
+# Qentra log agent — values.
+# Required: token (your org's logs:write API token) + qentraUrl.
+
+# Your Qentra API base URL.
+qentraUrl: "https://crm.qentra.it.com"
+# Org API token with scope logs:write (create it in Qentra → Observability → Connect).
+token: ""
+# Label stamped on this source, so you can tell clusters apart in Qentra.
+clusterName: "default"
+
+image:
+  # Public image on Docker Hub — anyone can pull, no auth needed.
+  repository: qentra/qentra-deamonsets
+  # Track the "0.5" MINOR CHANNEL: you automatically get patch updates on a
+  # rollout restart (no need for us to notify you). Pin to an exact build (e.g.
+  # "0.5.0") for reproducibility. We email you only for MAJOR updates.
+  tag: "0.5"
+  pullPolicy: Always
+
+# How often the agent flushes a batch of errors (seconds).
+flushSeconds: 10
+# Host path holding container logs (k8s default). Change for non-default runtimes.
+logDir: "/var/log/containers"
+podLogsDir: "/var/log/pods"
+
+# Kubernetes health visualizations (failing/pending pods, crashloops, restarts,
+# OOMKilled, evicted, unschedulable, missing requests, CPU/memory pressure).
+# Grants a READ-ONLY ClusterRole (get/list pods, nodes + metrics). Each agent
+# reports only its own node, so there's no redundant cluster-wide listing.
+kubeMetrics:
+  enabled: true
+  intervalSeconds: 30
+
+# Remote detail view + pod logs: the agent short-polls Qentra for SCOPED, AUDITED,
+# READ-ONLY requests (live resource details + pod logs) from Head-of-DevOps/owner
+# users. Grants read-only RBAC on workloads/services/ingress/hpa/vpa/events + pods/log.
+# Set enabled: false to fully disable the channel (operator kill-switch) — the agent
+# then won't poll and the RBAC isn't granted.
+remoteAccess:
+  enabled: true
+  pollSeconds: 4
+
+# Deliberately tiny — this barely registers on a node.
+resources:
+  requests:
+    cpu: 10m
+    memory: 16Mi
+  limits:
+    cpu: 100m
+    memory: 64Mi
+
+# Run on every node, including control-plane (logs live everywhere).
+tolerations:
+  - operator: Exists
+
+nodeSelector: {}
+affinity: {}
+imagePullSecrets: []

@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "qentra-agent.fullname" . }}
+  labels:
+    {{- include "qentra-agent.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "qentra-agent.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        {{- include "qentra-agent.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "qentra-agent.fullname" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      # Tiny + safe: non-root, read-only FS, no privilege escalation.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+      containers:
+        - name: agent
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: QENTRA_URL
+              value: {{ .Values.qentraUrl | quote }}
+            - name: QENTRA_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "qentra-agent.fullname" . }}
+                  key: token
+            - name: CLUSTER_NAME
+              value: {{ .Values.clusterName | quote }}
+            - name: FLUSH_SECONDS
+              value: {{ .Values.flushSeconds | quote }}
+            - name: LOG_GLOB
+              value: {{ .Values.logDir | quote }}
+            # k8s health collection — each agent reports only its own node.
+            - name: KUBE_METRICS
+              value: {{ .Values.kubeMetrics.enabled | quote }}
+            - name: CLUSTER_SECONDS
+              value: {{ .Values.kubeMetrics.intervalSeconds | quote }}
+            - name: QENTRA_REMOTE
+              value: {{ .Values.remoteAccess.enabled | quote }}
+            - name: POLL_SECONDS
+              value: {{ .Values.remoteAccess.pollSeconds | quote }}
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          ports:
+            - name: health
+              containerPort: 8080
+          livenessProbe:
+            httpGet: { path: /healthz, port: health }
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: varlog
+              mountPath: {{ .Values.logDir | quote }}
+              readOnly: true
+            - name: podlogs
+              mountPath: {{ .Values.podLogsDir | quote }}
+              readOnly: true
+      volumes:
+        - name: varlog
+          hostPath: { path: {{ .Values.logDir | quote }} }
+        - name: podlogs
+          hostPath: { path: {{ .Values.podLogsDir | quote }} }
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

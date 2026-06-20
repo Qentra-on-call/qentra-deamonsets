@@ -1,0 +1,17 @@
+Qentra agent installed 🎉
+
+It is now tailing container logs on every node and shipping ERRORS to:
+  {{ .Values.qentraUrl }}
+
+Check status:
+  kubectl get daemonset {{ include "qentra-agent.fullname" . }}
+
+{{- if not .Values.token }}
+
+⚠  No token set! The agent won't authenticate. Re-install with:
+  helm upgrade --install {{ .Release.Name }} qentra/qentra-agent \
+    --set token=<YOUR_LOGS_WRITE_TOKEN> --set qentraUrl={{ .Values.qentraUrl }}
+{{- end }}
+
+Open Qentra → Observability to see auto-captured errors and auto-dashboards.
+No dashboards to build, no queries to write.

@@ -1,0 +1,31 @@
+# chart-releaser CI for the PUBLIC charts repo.
+#
+# Copy this to `.github/workflows/charts-release.yml` in the public
+# `qentra-charts` GitHub repo (with `charts/qentra-agent/` at the repo root or
+# under charts/). On push to main it packages changed charts, creates GitHub
+# Releases, and publishes the Helm index to GitHub Pages so users can:
+#   helm repo add qentra https://murangomike.github.io/qentra-charts
+name: Release charts
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+  pages: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Configure git
+        run: |
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+      - uses: azure/setup-helm@v4
+      - name: Run chart-releaser
+        uses: helm/chart-releaser-action@v1.6.0
+        with:
+          charts_dir: charts
+        env:
+          CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
